@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>关于我们 - 鞋类产品展示</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="logo">鞋类产品</div>
+            <ul class="nav-links">
+                <li><a href="index.html">首页</a></li>
+                <li><a href="about.html" class="active">关于我们</a></li>
+            </ul>
+            <div class="language-switcher">
+                <button data-lang="zh" class="lang-btn active">中文</button>
+                <button data-lang="en" class="lang-btn">English</button>
+                <button data-lang="ko" class="lang-btn">한국어</button>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section class="about-section">
+            <h1 id="aboutTitle">关于我们</h1>
+            <div class="about-content">
+                <div class="about-text">
+                    <p id="aboutDesc1">我们专注于为客户提供高品质的鞋类产品，多年来一直致力于设计舒适、时尚、耐用的鞋履。</p>
+                    <p id="aboutDesc2">我们的产品涵盖多个系列，包括PU系列、真皮系列、短靴系列、乐福鞋系列等，满足不同客户的需求。</p>
+                    <p id="aboutDesc3">我们始终坚持品质第一的原则，从原材料选择到生产工艺，都严格把控，确保每一双鞋都达到最优品质。</p>
+                </div>
+                <div class="about-image">
+                    <img src="img1-50/1.png" alt="关于我们" id="aboutImage">
+                </div>
+            </div>
+        </section>
+
+        <section class="contact-section">
+            <h2 id="contactTitle">联系我们</h2>
+            <div class="contact-info">
+                <div class="contact-item">
+                    <span class="label" id="contactEmailLabel">邮箱：</span>
+                    <span class="value" id="contactEmail">contact@example.com</span>
+                </div>
+                <div class="contact-item">
+                    <span class="label" id="contactPhoneLabel">电话：</span>
+                    <span class="value" id="contactPhone">+86 123 4567 8900</span>
+                </div>
+                <div class="contact-item">
+                    <span class="label" id="contactAddressLabel">地址：</span>
+                    <span class="value" id="contactAddress">某某市某某区某某街道</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-content" id="footerContent">
+            <p>&copy; 2024 鞋类品牌. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="js/i18n.js"></script>
+    <script src="js/error-handler.js"></script>
+    <script src="js/about.js"></script>
+</body>
+</html>
