@@ -1,5 +1,5 @@
 const GITHUB_API_BASE = 'https://api.github.com';
-const REPO_OWNER = 'GH4';
+const REPO_OWNER = 'conlinzheng';
 const REPO_NAME = 'GH4';
 
 function getToken() {
