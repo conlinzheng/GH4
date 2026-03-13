@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 鞋类产品</title>
+    <link rel="stylesheet" href="css/config-style.css">
+</head>
+<body>
+    <header class="config-header">
+        <div class="header-left">
+            <h1>产品管理后台</h1>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-secondary" id="tokenBtn">设置 Token</button>
+            <button class="btn btn-primary" id="syncBtn">同步到 GitHub</button>
+        </div>
+    </header>
+
+    <nav class="config-nav">
+        <a href="#products" class="nav-item active">产品管理</a>
+        <a href="#upload" class="nav-item">图片上传</a>
+        <a href="#series" class="nav-item">系列管理</a>
+        <a href="#config" class="nav-item">网站配置</a>
+        <a href="../index.html" class="nav-item">查看前台</a>
+    </nav>
+
+    <main class="config-main">
+        <div id="view-products" class="view">
+            <div class="view-header">
+                <h2>产品管理</h2>
+                <button class="btn btn-primary" id="scanImagesBtn">扫描新图片</button>
+            </div>
+            <div class="products-list" id="productsList">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+
+        <div id="view-upload" class="view" style="display:none;">
+            <div class="view-header">
+                <h2>图片上传</h2>
+            </div>
+            <div class="upload-section">
+                <div class="form-group">
+                    <label>选择系列</label>
+                    <select id="uploadSeriesSelect" class="form-control">
+                        <option value="">请选择系列</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>选择图片</label>
+                    <input type="file" id="fileInput" multiple accept="image/*" class="form-control">
+                </div>
+                <div class="file-preview" id="filePreview"></div>
+                <button class="btn btn-primary" id="uploadBtn">上传图片</button>
+                <div class="upload-progress" id="uploadProgress" style="display:none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <span id="progressText">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-series" class="view" style="display:none;">
+            <div class="view-header">
+                <h2>系列管理</h2>
+                <button class="btn btn-primary" id="addSeriesBtn">添加系列</button>
+            </div>
+            <div class="series-list" id="seriesList">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+
+        <div id="view-config" class="view" style="display:none;">
+            <div class="view-header">
+                <h2>网站配置</h2>
+                <button class="btn btn-primary" id="saveConfigBtn">保存配置</button>
+            </div>
+            <div class="config-form">
+                <div class="form-group">
+                    <label>网站名称</label>
+                    <input type="text" id="siteName" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>联系邮箱</label>
+                    <input type="email" id="contactEmail" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>联系电话</label>
+                    <input type="text" id="contactPhone" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>联系地址</label>
+                    <input type="text" id="contactAddress" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>页脚文字</label>
+                    <input type="text" id="footerText" class="form-control">
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="tokenModal" style="display:none;">
+        <div class="modal-content">
+            <h3>设置 GitHub Token</h3>
+            <p>请输入具有 repo 权限的 GitHub Personal Access Token</p>
+            <input type="password" id="tokenInput" class="form-control" placeholder="ghp_xxxxxxx">
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelTokenBtn">取消</button>
+                <button class="btn btn-primary" id="saveTokenBtn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="productModal" style="display:none;">
+        <div class="modal-content modal-large">
+            <h3 id="productModalTitle">编辑产品</h3>
+            <div class="product-edit-form" id="productEditForm"></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelProductBtn">取消</button>
+                <button class="btn btn-primary" id="saveProductBtn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification" style="display:none;"></div>
+
+    <script src="js/app.js"></script>
+    <script src="js/notifier.js"></script>
+    <script src="js/ui-components.js"></script>
+    <script src="js/github-sync.js"></script>
+    <script src="js/data-manager.js"></script>
+    <script src="js/product-editor.js"></script>
+    <script src="js/upload-manager.js"></script>
+    <script src="js/series-manager.js"></script>
+    <script src="js/config-editor.js"></script>
+    <script src="js/auto-save.js"></script>
+</body>
+</html>
