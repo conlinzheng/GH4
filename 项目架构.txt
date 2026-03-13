@@ -1,0 +1,394 @@
+GH3 项目最终优化架构（含图片上传与多语言支持）
+一、设计目标
+零代码基础用户友好：用户通过网页上传图片、填写多语言产品信息，无需手动编辑 JSON 或使用 Git。
+
+自动化元数据同步：产品信息自动保存至 GitHub 仓库的 products.json，支持多语言字段。
+
+完整配置后台：提供图形界面管理产品、系列、网站配置，并支持一键同步到 GitHub。
+
+多语言前台：支持中文、英文、韩语切换，产品名称和描述随语言变化。
+
+稳定的前台展示：解决 API 限流、图片性能问题，保证用户体验。
+
+二、优化后项目文件结构
+text
+GH3/
+├── index.html                      # 首页（产品展示）
+├── about.html                      # 关于我们
+├── config/                         # 配置后台
+│   ├── config.html                 # 后台主入口
+│   ├── css/
+│   │   └── config-style.css        # 后台专用样式
+│   └── js/
+│       ├── app.js                   # 主应用初始化、路由
+│       ├── data-manager.js           # 数据核心（产品、系列、配置 CRUD）
+│       ├── github-sync.js            # GitHub API 封装 + 同步逻辑
+│       ├── product-editor.js         # 产品编辑视图（表格/表单，含多语言）
+│       ├── upload-manager.js         # 图片上传界面及逻辑
+│       ├── series-manager.js         # 系列管理
+│       ├── config-editor.js          # 网站配置编辑
+│       ├── translation-manager.js    # 后台翻译管理（内置词典）
+│       ├── ui-components.js          # 可复用 UI 组件（模态框、通知、表格）
+│       ├── notifier.js               # 通知系统
+│       └── auto-save.js              # 自动保存到 localStorage
+├── upload.html                      # 改为重定向到 config.html#upload
+├── products-config.json              # 全局配置文件（备份）
+├── css/
+│   └── style.css                    # 前台样式
+├── js/
+│   ├── frontend.js                   # 前台入口
+│   ├── github-api.js                  # GitHub API 请求模块（带缓存、限流）
+│   ├── cache-manager.js                # 缓存管理
+│   ├── lazy-load.js                    # 图片懒加载
+│   ├── i18n.js                         # 多语言初始化及翻译函数
+│   └── error-handler.js                 # 统一错误处理
+├── img1-50/                           # 网站静态资源
+└── 产品图/                              # 产品图片目录
+    ├── 1-PU系列/
+    │   ├── products.json              # 系列元数据（含多语言）
+    │   ├── 鞋1_800x600.jpg
+    │   └── 鞋2_800x600.jpg
+    ├── 2-真皮系列/
+    │   ├── products.json
+    │   └── ...
+    └── ...
+三、各文件详细功能说明
+3.1 前台模块（js/）
+文件	功能
+frontend.js	前台入口。初始化语言、轮播图、加载产品数据（优先缓存，后调 GitHub API），渲染产品列表，应用页脚配置。
+github-api.js	封装 GitHub API 请求，支持 token 认证、自动重试、限流检测。提供 fetchDirectory(path)、fetchFile(path)、commitFile(path, content, message) 等方法。
+cache-manager.js	管理 localStorage 缓存。提供 get(key, ttl)、set(key, data)、clear(key)。产品缓存 TTL 设为 1 小时。
+lazy-load.js	基于 IntersectionObserver 实现图片懒加载。为 <img> 添加 data-src 属性。
+i18n.js	多语言核心。包含：
+• supportedLanguages = ['zh', 'en', 'ko']
+• currentLanguage 从 localStorage 读取
+• switchLanguage(lang)：切换语言，重新加载页面内容（或触发重新渲染）
+• translate(key, fallback)：从语言包获取翻译，但前台产品内容动态生成，实际使用 getLocalizedField(product, field) 从产品数据中提取对应语言字段。
+error-handler.js	统一错误处理函数 handleError(error, fallback)，向用户显示友好提示并执行降级逻辑（如使用缓存）。
+3.2 后台模块（config/js/）
+文件	功能
+app.js	后台应用入口。初始化路由（监听 hash 变化），加载对应视图模块，管理全局状态（如当前 GitHub token、语言设置等）。
+data-manager.js	核心数据管理。维护内存中的产品数据（含多语言字段）、系列数据、网站配置。提供 loadFromGitHub()、saveToGitHub()、getProductsBySeries()、updateProduct(seriesId, productId, data)、addProduct(seriesId, productData)、deleteProduct(seriesId, productId) 等方法。数据变更后触发自定义事件通知视图更新。
+github-sync.js	GitHub 同步引擎。封装与 GitHub 仓库的交互：
+• setToken(token)：保存 token 到 localStorage。
+• fetchSeriesList()：获取所有系列文件夹。
+• fetchSeriesImages(seriesId)：获取某系列所有图片文件。
+• fetchSeriesMetadata(seriesId)：获取该系列的 products.json 内容。
+• pushSeriesMetadata(seriesId, metadata)：提交更新后的 products.json 到 GitHub（支持新增/修改文件）。
+• uploadImage(seriesId, file)：上传单个图片文件到指定系列文件夹。
+• scanForNewImages()：扫描所有系列，对比现有 metadata，返回新图片列表（按系列分组）。
+product-editor.js	产品编辑视图（含多语言）。渲染可编辑的产品表格，支持：
+• 按系列折叠/展开。
+• 新增图片行（自动识别未录入图片）。
+• 编辑产品多语言字段（名称、描述）及通用字段（价格、材质）。
+• 保存按钮：调用 data-manager.updateProduct 更新内存，并触发保存到 GitHub。
+upload-manager.js	图片上传界面。提供：
+• 系列下拉选择（从 github-sync.fetchSeriesList() 获取）。
+• 文件选择（支持多选、图片预览）。
+• 上传按钮：调用 github-sync.uploadImage 并发上传，显示进度条。
+• 上传完成后，可选“刷新产品列表”直接进入 product-editor 并自动扫描新图片。
+series-manager.js	系列管理视图。可添加/删除系列（需在 GitHub 创建文件夹，需 token）。
+config-editor.js	网站配置编辑视图（联系信息、页脚、社交媒体等）。配置数据保存在 localStorage，并可同步到 products-config.json。
+translation-manager.js	后台翻译管理（内置词典，用于自动翻译产品字段，可选）。
+ui-components.js	可复用组件：
+• Modal：模态框类，用于确认对话框、表单弹窗。
+• DataTable：动态表格，支持排序、编辑。
+• Tabs：标签页组件，用于多语言输入切换。
+• ProgressBar：上传进度条。
+• Notification：消息提示。
+notifier.js	显示成功/错误/警告消息。
+auto-save.js	定时将内存中的数据（产品、配置）写入 localStorage 的草稿区，防止意外丢失。
+四、多语言数据结构设计
+4.1 前台语言包（静态界面）
+界面元素（如“首页”、“关于我们”、“联系我们”）的翻译存储在前台 i18n.js 的一个对象中：
+
+javascript
+const translations = {
+  zh: { home: '首页', about: '关于我们', contact: '联系我们' },
+  en: { home: 'Home', about: 'About', contact: 'Contact' },
+  ko: { home: '홈', about: '소개', contact: '연락처' }
+};
+4.2 产品元数据（products.json）
+每个系列的 products.json 存储多语言产品信息，结构如下：
+
+json
+{
+  "seriesName": {
+    "zh": "PU系列",
+    "en": "PU Series",
+    "ko": "PU 시리즈"
+  },
+  "products": {
+    "鞋1_800x600.jpg": {
+      "name": {
+        "zh": "经典PU短靴",
+        "en": "Classic PU Boots",
+        "ko": "클래식 PU 부츠"
+      },
+      "description": {
+        "zh": "耐磨PU材质，适合日常穿着",
+        "en": "Durable PU material, suitable for daily wear",
+        "ko": "내구성 있는 PU 소재, 일상적인 착용에 적합"
+      },
+      "price": "299",
+      "materials": {
+        "upper": "PU",
+        "lining": "织物",
+        "sole": "橡胶"
+      }
+    }
+  }
+}
+seriesName 也支持多语言，用于前台系列标题。
+
+每个产品的 name 和 description 为语言对象，其他字段（如价格、材质）可共用或也可扩展为多语言（视需求而定）。
+
+4.3 前台提取逻辑
+在 frontend.js 中，渲染产品卡片时：
+
+javascript
+function getLocalizedField(obj, field, lang) {
+  if (obj[field] && obj[field][lang]) return obj[field][lang];
+  // 回退到默认语言（zh）
+  return obj[field] ? obj[field]['zh'] || '' : '';
+}
+产品系列标题同理。
+
+4.4 后台多语言编辑界面
+在产品编辑表格中，每个产品的名称和描述字段可展开多语言输入框（使用 Tabs 组件，分别显示 zh/en/ko 输入框）。
+
+系列名称也可在系列管理界面多语言编辑。
+
+保存时，product-editor.js 收集各语言输入，构建符合上述结构的对象，更新到 data-manager。
+
+五、后台图片上传流程
+5.1 界面
+路由 #upload 加载 upload-manager.js 视图。
+
+界面包含：
+
+系列下拉选择（动态获取）。
+
+文件选择区域（支持 drag & drop，多选）。
+
+文件列表预览，可移除。
+
+上传按钮，点击后开始上传。
+
+进度条（总进度或单个文件进度）。
+
+上传完成后，提供“刷新产品列表”按钮跳转到 #product-editor 并自动扫描新图片。
+
+5.2 核心逻辑（upload-manager.js）
+javascript
+class UploadManager {
+  constructor() {
+    this.selectedSeries = null;
+    this.files = [];
+  }
+
+  async uploadFiles() {
+    if (!this.selectedSeries) return notifier.warning('请选择系列');
+    if (this.files.length === 0) return notifier.warning('请选择图片');
+    
+    const token = githubSync.getToken();
+    if (!token) {
+      notifier.error('请先在设置中配置 GitHub Token');
+      return;
+    }
+
+    this.showProgress(true);
+    let successCount = 0;
+    for (let i = 0; i < this.files.length; i++) {
+      const file = this.files[i];
+      try {
+        await githubSync.uploadImage(this.selectedSeries, file);
+        successCount++;
+        this.updateProgress(i + 1, this.files.length);
+      } catch (err) {
+        notifier.error(`上传 ${file.name} 失败: ${err.message}`);
+      }
+    }
+    this.showProgress(false);
+    notifier.success(`成功上传 ${successCount} 个文件`);
+    
+    // 可选：自动跳转到产品编辑并扫描新图片
+    if (successCount > 0) {
+      if (confirm('是否立即刷新产品列表并扫描新图片？')) {
+        window.location.hash = '#product-editor&scan=true';
+      }
+    }
+  }
+
+  // 其他方法：文件选择、预览、移除等
+}
+5.3 github-sync.js 新增方法
+javascript
+async function uploadImage(seriesId, file) {
+  const path = `产品图/${seriesId}/${file.name}`;
+  const content = await readFileAsBase64(file); // 需要将 File 转为 base64
+  const message = `Upload ${file.name}`;
+  return commitFile(path, content, message); // 调用 GitHub API 创建/更新文件
+}
+
+// 辅助函数：将 File 转为 base64（去掉 data:image/xxx;base64, 前缀）
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+六、前后台多语言实现细节
+6.1 前台语言切换
+在 index.html 添加语言切换按钮（如中文、English、한국어），绑定 i18n.switchLanguage(lang)。
+
+switchLanguage 将语言保存到 localStorage，然后重新加载产品数据（或重新渲染现有数据）。由于产品数据已经包含多语言字段，只需重新生成 HTML。
+
+为避免重复请求，可复用已加载的产品数据，仅重新渲染。
+
+6.2 后台多语言编辑
+产品编辑表格中，对每个产品的名称和描述字段，使用 Tabs 组件：
+
+html
+<div class="language-tabs">
+  <button data-lang="zh">中文</button>
+  <button data-lang="en">English</button>
+  <button data-lang="ko">한국어</button>
+</div>
+<div class="language-pane" data-lang="zh">
+  <input type="text" class="product-name-zh" value="...">
+  <textarea class="product-desc-zh">...</textarea>
+</div>
+<!-- 类似 en, ko -->
+保存时，遍历所有语言，构建 name: { zh: ..., en: ..., ko: ... } 对象。
+
+6.3 后台默认值填充
+当扫描到新图片时，可尝试从文件名猜测名称，并填充到所有语言输入框（可允许用户单独修改）。
+
+七、关键函数清单（补充）
+7.1 github-sync.js 新增/修改函数
+函数	说明
+uploadImage(seriesId, file)	上传单个图片文件到指定系列文件夹。
+commitFile(path, base64Content, message)	通用提交文件方法，处理文件存在/不存在的情况（需获取当前 SHA 以更新）。
+7.2 i18n.js（前台）
+函数	说明
+init()	从 localStorage 读取语言，设置 currentLanguage，绑定语言切换按钮。
+switchLanguage(lang)	更新 currentLanguage 和 localStorage，触发 languageChanged 事件，供 frontend.js 监听并重新渲染。
+getLocalizedField(obj, field)	根据 currentLanguage 从对象中提取对应字段，支持回退。
+t(key)	翻译静态界面文本（从 translations 对象获取）。
+7.3 product-editor.js 新增多语言处理
+函数	说明
+renderProductRow(product, seriesId)	渲染一行产品，包含多语言输入控件（Tabs）。
+collectFormData()	遍历所有行，读取各语言输入，构建带多语言的产品对象。
+7.4 data-manager.js 调整
+updateProduct(seriesId, productId, data) 接收的 data 应包含多语言字段。
+
+addProduct(seriesId, productData) 同理。
+
+八、数据流向图（含上传和多语言）
+8.1 后台图片上传与产品编辑流程
+text
+用户进入 config.html#upload
+       │
+       ▼
+upload-manager 渲染，获取系列列表（调用 github-sync.fetchSeriesList）
+       │
+       ▼
+用户选择系列、选择图片 → 点击上传
+       │
+       ▼
+upload-manager 逐个调用 github-sync.uploadImage
+       │
+       ▼
+GitHub API 将图片写入对应系列文件夹
+       │
+       ▼
+上传完成，提示成功，可选跳转产品编辑
+       │
+       ▼
+product-editor 加载，自动调用 scanNewImages()
+       │
+       ▼
+github-sync.scanForNewImages() 返回新图片列表
+       │
+       ▼
+product-editor 添加新行，预填默认名称（多语言）
+       │
+       ▼
+用户编辑多语言字段 → 点击保存
+       │
+       ▼
+data-manager 更新内存 → github-sync.pushSeriesMetadata()
+       │
+       ▼
+GitHub 更新 products.json
+8.2 前台多语言切换流程
+text
+用户点击语言按钮
+       │
+       ▼
+i18n.switchLanguage(lang)
+       │
+       ▼
+更新 localStorage 并触发 'languageChanged' 事件
+       │
+       ▼
+frontend.js 监听事件，调用 renderProducts(productsData)
+       │
+       ▼
+重新生成 HTML，过程中调用 i18n.getLocalizedField() 提取对应语言文本
+       │
+       ▼
+页面语言更新
+九、注意事项
+GitHub Token 权限
+
+上传图片和更新 products.json 都需要写入权限，Token 必须包含 repo 范围。
+
+在后台设置 Token 时，应提供 GitHub Token 生成链接和权限说明。
+
+文件大小限制
+
+GitHub API 单个文件上传限制为 100MB，但图片通常较小，可正常处理。
+
+对于大图片，建议在前端压缩后再上传（可选）。
+
+图片命名冲突
+
+如果上传同名文件，GitHub API 会更新现有文件（保留历史记录），符合预期。但可能覆盖原有图片，需提示用户。
+
+多语言回退策略
+
+前台应始终有默认语言（zh），当某个语言字段缺失时显示中文，避免空白。
+
+后台自动保存
+
+产品编辑过程中，使用 auto-save.js 将当前编辑状态保存到 localStorage 草稿，防止意外刷新丢失数据。
+
+性能考虑
+
+图片上传并发数不宜过大，建议限制为 3-5 个并发，避免浏览器或 API 限制。
+
+扫描新图片时，若系列较多，可增加加载动画。
+
+浏览器兼容性
+
+使用 FileReader 读取文件，较旧浏览器可能不支持，需提示用户升级。
+
+十、快速开始指南（最终版）
+设置 GitHub Token
+打开 config.html → 点击右上角“设置 Token” → 输入具有 repo 权限的 token（生成 token）。
+
+上传图片
+进入“上传图片”页面 → 选择系列 → 选择本地图片（可多选）→ 点击上传。等待上传完成。
+
+编辑产品信息（含多语言）
+进入“产品编辑”页面 → 点击“扫描新图片” → 新图片自动出现在表格中 → 点击每个产品的名称/描述字段，通过标签页切换语言并填写内容 → 填写价格、材质 → 点击“保存所有更改”。
+
+查看前台
+刷新首页，产品将显示。点击语言切换按钮，可查看对应语言的名称和描述。
+
+修改网站配置
+进入“网站配置”页面，编辑联系信息、页脚等，保存后刷新首页生效。
