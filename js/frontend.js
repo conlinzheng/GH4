@@ -10,6 +10,7 @@ async function initFrontend() {
     }
     
     loadLocalImages();
+    renderHeroSlider();
     
     window.addEventListener('languageChanged', () => {
         renderProducts(allProducts);
@@ -18,32 +19,26 @@ async function initFrontend() {
 }
 
 function loadLocalImages() {
-    const seriesMap = {
-        1: { id: 'PU系列', name: { zh: 'PU系列', en: 'PU Series', ko: 'PU 시리즈' } },
-        2: { id: '真皮系列', name: { zh: '真皮系列', en: 'Genuine Leather', ko: '진피 시리즈' } },
-        3: { id: '短靴系列', name: { zh: '短靴系列', en: 'Boots', ko: '부츠 시리즈' } },
-        4: { id: '乐福系列', name: { zh: '乐福系列', en: 'Loafers', ko: '로퍼 시리즈' } },
-        5: { id: '春季新款', name: { zh: '春季新款', en: 'Spring New', ko: '봄 신상' } },
-        6: { id: '夏季清凉', name: { zh: '夏季清凉', en: 'Summer Cool', ko: '여름 시원함' } },
-        7: { id: '秋季时尚', name: { zh: '秋季时尚', en: 'Autumn Fashion', ko: '가을 패션' } },
-        8: { id: '冬季保暖', name: { zh: '冬季保暖', en: 'Winter Warm', ko: '겨울保暖' } }
-    };
+    const seriesData = [
+        { id: '1-PU系列', name: { zh: 'PU系列', en: 'PU Series', ko: 'PU 시리즈' } },
+        { id: '2-真皮系列', name: { zh: '真皮系列', en: 'Genuine Leather', ko: '진피 시리즈' } },
+        { id: '3-短靴系列', name: { zh: '短靴系列', en: 'Boots', ko: '부츠 시리즈' } },
+        { id: '4-乐福系列', name: { zh: '乐福系列', en: 'Loafers', ko: '로퍼 시리즈' } },
+        { id: '5-春季', name: { zh: '春季新款', en: 'Spring New', ko: '봄 신상' } },
+        { id: '6-夏季', name: { zh: '夏季清凉', en: 'Summer Cool', ko: '여름 시원함' } },
+        { id: '7-秋季', name: { zh: '秋季时尚', en: 'Autumn Fashion', ko: '가을 패션' } },
+        { id: '8-冬季', name: { zh: '冬季保暖', en: 'Winter Warm', ko: '겨울保暖' } }
+    ];
     
     allProducts = [];
     
-    for (let i = 1; i <= 50; i++) {
-        const seriesIndex = Math.ceil(i / 6);
-        const series = seriesMap[seriesIndex] || seriesMap[1];
-        
+    seriesData.forEach(series => {
         allProducts.push({
             seriesId: series.id,
             seriesName: series.name,
-            filename: `${i}.png`,
-            name: { zh: `产品 ${i}`, en: `Product ${i}`, ko: `제품 ${i}` },
-            description: { zh: '优质鞋品，舒适时尚', en: 'High quality shoes, comfortable and stylish', ko: '고품질 신발, 편안하고 세련됨' },
-            price: ''
+            isSeries: true
         });
-    }
+    });
     
     renderProducts(allProducts);
     renderSeriesFilter();
@@ -64,6 +59,23 @@ function renderProducts(products) {
     }
     
     grid.innerHTML = filteredProducts.map(product => {
+        if (product.isSeries) {
+            const name = getLocalizedField(product, 'seriesName');
+            return `
+                <div class="product-card series-card">
+                    <div class="series-image-container">
+                        <img class="product-image" 
+                             src="产品图/${product.id}/"
+                             alt="${name}"
+                             onerror="this.style.display='none'">
+                        <div class="series-overlay">
+                            <div class="product-name">${name}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
         const name = getLocalizedField(product, 'name');
         const description = getLocalizedField(product, 'description');
         
@@ -90,22 +102,22 @@ function renderSeriesFilter() {
     const filterContainer = document.getElementById('seriesFilter');
     if (!filterContainer) return;
     
-    const seriesMap = new Map();
-    allProducts.forEach(product => {
-        if (!seriesMap.has(product.seriesId)) {
-            seriesMap.set(product.seriesId, product.seriesName || { zh: product.seriesId });
-        }
-    });
-    
     const buttons = [{
         id: 'all',
         name: t('allSeries')
     }];
     
-    seriesMap.forEach((seriesNameObj, seriesId) => {
+    const uniqueSeries = [];
+    allProducts.forEach(product => {
+        if (product.isSeries && !uniqueSeries.find(s => s.id === product.seriesId)) {
+            uniqueSeries.push(product);
+        }
+    });
+    
+    uniqueSeries.forEach(product => {
         buttons.push({
-            id: seriesId,
-            name: getLocalizedField(seriesNameObj, 'name') || seriesId
+            id: product.seriesId,
+            name: getLocalizedField(product, 'seriesName') || product.seriesId
         });
     });
     
