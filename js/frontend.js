@@ -48,3 +48,104 @@ function loadLocalImages() {
     renderProducts(allProducts);
     renderSeriesFilter();
 }
+
+function renderProducts(products) {
+    const grid = document.getElementById('productsGrid');
+    if (!grid) return;
+    
+    let filteredProducts = products;
+    if (currentFilter !== 'all') {
+        filteredProducts = products.filter(p => p.seriesId === currentFilter);
+    }
+    
+    if (filteredProducts.length === 0) {
+        grid.innerHTML = '<div class="no-products">' + t('noProducts') + '</div>';
+        return;
+    }
+    
+    grid.innerHTML = filteredProducts.map(product => {
+        const name = getLocalizedField(product, 'name');
+        const description = getLocalizedField(product, 'description');
+        
+        return `
+            <div class="product-card">
+                <img class="product-image lazy" 
+                     data-src="img1-50/${product.filename}" 
+                     src="img1-50/${product.filename}"
+                     alt="${name}"
+                     onerror="this.src='img1-50/1.png'">
+                <div class="product-info">
+                    <div class="product-name">${name}</div>
+                    <div class="product-desc">${description || ''}</div>
+                    ${product.price ? `<div class="product-price">¥${product.price}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    initLazyLoad();
+}
+
+function renderSeriesFilter() {
+    const filterContainer = document.getElementById('seriesFilter');
+    if (!filterContainer) return;
+    
+    const seriesMap = new Map();
+    allProducts.forEach(product => {
+        if (!seriesMap.has(product.seriesId)) {
+            seriesMap.set(product.seriesId, product.seriesName || { zh: product.seriesId });
+        }
+    });
+    
+    const buttons = [{
+        id: 'all',
+        name: t('allSeries')
+    }];
+    
+    seriesMap.forEach((seriesNameObj, seriesId) => {
+        buttons.push({
+            id: seriesId,
+            name: getLocalizedField(seriesNameObj, 'name') || seriesId
+        });
+    });
+    
+    filterContainer.innerHTML = buttons.map(btn => `
+        <button class="filter-btn ${currentFilter === btn.id ? 'active' : ''}" 
+                data-series="${btn.id}">
+            ${btn.name}
+        </button>
+    `).join('');
+    
+    filterContainer.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentFilter = btn.dataset.series;
+            renderSeriesFilter();
+            renderProducts(allProducts);
+        });
+    });
+}
+
+function renderHeroSlider() {
+    const slider = document.getElementById('heroSlider');
+    if (!slider) return;
+    
+    const bgImages = [];
+    for (let i = 1; i <= 5; i++) {
+        bgImages.push(`img1-50/${i}.png`);
+    }
+    
+    if (bgImages.length === 0) {
+        return;
+    }
+    
+    slider.innerHTML = bgImages.map((src, index) => `
+        <img src="${src}" alt="Banner ${index + 1}" style="position:absolute;width:100%;height:100%;object-fit:cover;opacity:0.3;">
+    `).join('');
+    
+    let currentSlide = 0;
+    setInterval(() => {
+        currentSlide = (currentSlide + 1) % bgImages.length;
+    }, 5000);
+}
+
+document.addEventListener('DOMContentLoaded', initFrontend);
