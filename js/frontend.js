@@ -209,7 +209,7 @@ async function loadLocalImages() {
         const groupedProducts = groupImagesAsProducts(files, series.id, series.name);
         
         Object.values(groupedProducts).forEach(product => {
-            const meta = productsMetadata?.[series.id]?.[product.productKey];
+            const meta = productsMetadata?.[series.id]?.products?.[product.productKey];
             
             allProducts.push({
                 seriesId: product.seriesId,

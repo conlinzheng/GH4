@@ -391,6 +391,42 @@
                     });
                 });
                 
+                let existingMetadata = null;
+                try {
+                    const existingFile = await GitHubAPI.getFile(`产品图/${seriesId}/products.json`);
+                    if (existingFile.content) {
+                        const decoded = decodeURIComponent(escape(atob(existingFile.content)));
+                        existingMetadata = JSON.parse(decoded);
+                    }
+                } catch (e) {}
+                
+                if (existingMetadata && existingMetadata.products) {
+                    Object.keys(productMap).forEach(key => {
+                        if (existingMetadata.products[key]) {
+                            const existing = existingMetadata.products[key];
+                            productMap[key].name = existing.name || { zh: key, en: key, ko: key };
+                            productMap[key].description = existing.description || { zh: '', en: '', ko: '' };
+                            productMap[key].price = existing.price || '';
+                            productMap[key].materials = existing.materials || {};
+                            productMap[key].customization = existing.customization || { available: false, minOrder: 0 };
+                        } else {
+                            productMap[key].name = { zh: key, en: key, ko: key };
+                            productMap[key].description = { zh: '', en: '', ko: '' };
+                            productMap[key].price = '';
+                            productMap[key].materials = {};
+                            productMap[key].customization = { available: false, minOrder: 0 };
+                        }
+                    });
+                } else {
+                    Object.keys(productMap).forEach(key => {
+                        productMap[key].name = { zh: key, en: key, ko: key };
+                        productMap[key].description = { zh: '', en: '', ko: '' };
+                        productMap[key].price = '';
+                        productMap[key].materials = {};
+                        productMap[key].customization = { available: false, minOrder: 0 };
+                    });
+                }
+                
                 const metadata = {
                     seriesName: { 
                         zh: seriesNames[seriesId], 
@@ -491,9 +527,13 @@
                         const metadata = JSON.parse(decoded);
                         
                         products.forEach(p => {
-                            if (p.seriesId === series.id && metadata[p.productKey]) {
-                                const m = metadata[p.productKey];
-                                Object.assign(p, m);
+                            if (p.seriesId === series.id && metadata.products && metadata.products[p.productKey]) {
+                                const m = metadata.products[p.productKey];
+                                p.name = m.name || p.name;
+                                p.description = m.description || p.description;
+                                p.price = m.price || '';
+                                p.materials = m.materials || {};
+                                p.customization = m.customization || { available: false, minOrder: 0 };
                             }
                         });
                     }
