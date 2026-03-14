@@ -1,5 +1,5 @@
 const APP_CONFIG = {
-    repoOwner: 'GH4',
+    repoOwner: 'conlinzheng',
     repoName: 'GH4',
     apiBase: 'https://api.github.com'
 };

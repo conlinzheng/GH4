@@ -1,94 +1,28 @@
-const GITHUB_API_BASE = 'https://api.github.com';
-const REPO_OWNER = 'conlinzheng';
-const REPO_NAME = 'GH4';
-
-function getToken() {
-    return localStorage.getItem('github_token');
-}
-
-async function fetchAPI(endpoint, options = {}) {
-    const token = getToken();
-    const url = `${GITHUB_API_BASE}${endpoint}`;
+async function fetchFile(path) {
+    const token = localStorage.getItem('github_token');
+    if (!token) throw new Error('No token');
     
-    const headers = {
-        'Accept': 'application/vnd.github.v3+json',
-        ...options.headers
-    };
-    
-    if (token) {
-        headers['Authorization'] = `token ${token}`;
-    }
-    
-    const response = await fetch(url, {
-        ...options,
-        headers
+    const response = await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/${path}`, {
+        headers: {
+            'Authorization': `token ${token}`,
+            'Accept': 'application/vnd.github.v3+json'
+        }
     });
     
-    if (response.status === 403) {
-        throw new Error('API请求频率超限，请稍后重试');
-    }
-    
-    if (response.status === 401) {
-        throw new Error('GitHub Token无效，请检查配置');
-    }
-    
     if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status}`);
-    }
-    
-    if (response.status === 204) {
-        return null;
+        throw new Error(`Failed to fetch ${path}: ${response.status}`);
     }
     
     return response.json();
 }
 
-async function fetchDirectory(path) {
-    const endpoint = `/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
-    return fetchAPI(endpoint);
-}
-
-async function fetchFile(path) {
-    const endpoint = `/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
-    return fetchAPI(endpoint);
-}
-
-async function commitFile(path, content, message, isBase64 = true) {
-    const token = getToken();
-    if (!token) {
-        throw new Error('请先设置GitHub Token');
-    }
-    
-    const endpoint = `/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
-    
-    let sha = null;
-    try {
-        const existing = await fetchFile(path);
-        sha = existing.sha;
-    } catch (e) {
-    }
-    
-    const encodedContent = isBase64 ? content : btoa(unescape(encodeURIComponent(content)));
-    
-    const body = {
-        message: message,
-        content: encodedContent
-    };
-    
-    if (sha) {
-        body.sha = sha;
-    }
-    
-    return fetchAPI(endpoint, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    });
+function isGarbled(text) {
+    return text && (text.includes('Ã') || text.includes('Â') || text.includes('â'));
 }
 
 async function fetchSeriesList() {
     try {
-        const contents = await fetchDirectory('产品图');
+        const contents = await fetchFile('产品图');
         return contents
             .filter(item => item.type === 'dir')
             .map(dir => ({
@@ -96,7 +30,30 @@ async function fetchSeriesList() {
                 name: dir.name
             }));
     } catch (e) {
-        console.error('Failed to fetch series list:', e);
+        console.log('Using default series list');
+        return [
+            { id: '1-PU系列', name: '1-PU系列' },
+            { id: '2-真皮系列', name: '2-真皮系列' },
+            { id: '3-短靴系列', name: '3-短靴系列' },
+            { id: '4-乐福系列', name: '4-乐福系列' },
+            { id: '5-春季', name: '5-春季' },
+            { id: '6-夏季', name: '6-夏季' },
+            { id: '7-秋季', name: '7-秋季' },
+            { id: '8-冬季', name: '8-冬季' }
+        ];
+    }
+}
+
+async function fetchSeriesImages(seriesId) {
+    try {
+        const contents = await fetchFile(`产品图/${seriesId}`);
+        return contents
+            .filter(item => item.type === 'file' && item.name.match(/\.(jpg|jpeg|png|gif)$/i))
+            .map(file => ({
+                name: file.name,
+                download_url: file.download_url
+            }));
+    } catch (e) {
         return [];
     }
 }
@@ -105,82 +62,253 @@ async function fetchSeriesMetadata(seriesId) {
     try {
         const metadataFile = await fetchFile(`产品图/${seriesId}/products.json`);
         if (metadataFile.content) {
-            return JSON.parse(atob(metadataFile.content));
+            const decoded = decodeURIComponent(escape(atob(metadataFile.content)));
+            if (isGarbled(decoded)) {
+                console.log(`Detected garbled metadata for ${seriesId}, skipping...`);
+                return null;
+            }
+            return JSON.parse(decoded);
         }
     } catch (e) {
-        console.log(`No products.json for series: ${seriesId}`);
+        console.log(`No metadata for ${seriesId}`);
     }
-    
     return null;
 }
 
-async function fetchSeriesImages(seriesId) {
+async function deleteSeriesMetadata(seriesId) {
+    const token = localStorage.getItem('github_token');
+    if (!token) return;
+    
     try {
-        const contents = await fetchDirectory(`产品图/${seriesId}`);
-        return contents.filter(item => 
-            item.type === 'file' && 
-            /\.(jpg|jpeg|png|gif|webp)$/i.test(item.name) &&
-            !item.name.includes('products.json')
-        );
+        const metadataFile = await fetchFile(`产品图/${seriesId}/products.json`);
+        
+        await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/产品图/${seriesId}/products.json`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `token ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.github.v3+json'
+            },
+            body: JSON.stringify({
+                message: `Delete products.json for ${seriesId}`,
+                sha: metadataFile.sha
+            })
+        });
+        console.log(`Deleted products.json for ${seriesId}`);
     } catch (e) {
-        console.error(`Failed to fetch images for series ${seriesId}:`, e);
-        return [];
+        console.log(`No products.json to delete for ${seriesId}`);
     }
 }
 
-async function pushSeriesMetadata(seriesId, metadata) {
-    const content = JSON.stringify(metadata, null, 2);
-    return commitFile(`产品图/${seriesId}/products.json`, content, `Update products.json for ${seriesId}`, false);
+async function pushSeriesMetadata(seriesId, data) {
+    const token = localStorage.getItem('github_token');
+    if (!token) return;
+    
+    const content = JSON.stringify(data, null, 2);
+    const encoded = btoa(unescape(encodeURIComponent(content)));
+    
+    try {
+        const existing = await fetchFile(`产品图/${seriesId}/products.json`);
+        
+        await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/产品图/${seriesId}/products.json`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `token ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.github.v3+json'
+            },
+            body: JSON.stringify({
+                message: `Update products.json for ${seriesId}`,
+                content: encoded,
+                sha: existing.sha
+            })
+        });
+        console.log(`Updated products.json for ${seriesId}`);
+    } catch (e) {
+        try {
+            await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/产品图/${seriesId}/products.json`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${token}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                body: JSON.stringify({
+                    message: `Create products.json for ${seriesId}`,
+                    content: encoded
+                })
+            });
+            console.log(`Created products.json for ${seriesId}`);
+        } catch (createError) {
+            console.error(`Failed to create products.json for ${seriesId}:`, createError);
+        }
+    }
+}
+
+async function fetchAllImages() {
+    const seriesList = await fetchSeriesList();
+    const allImages = [];
+    
+    for (const series of seriesList) {
+        const images = await fetchSeriesImages(series.id);
+        images.forEach(img => {
+            allImages.push({
+                seriesId: series.id,
+                name: img.name,
+                download_url: img.download_url
+            });
+        });
+    }
+    
+    return allImages;
+}
+
+async function commitFile(path, content, message, isBase64 = true) {
+    const token = localStorage.getItem('github_token');
+    if (!token) {
+        throw new Error('No token');
+    }
+    
+    const encoded = btoa(unescape(encodeURIComponent(content)));
+    
+    try {
+        const existing = await fetchFile(path);
+        
+        const response = await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/${path}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `token ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.github.v3+json'
+            },
+            body: JSON.stringify({
+                message: message,
+                content: encoded,
+                sha: existing.sha
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to commit: ${response.status}`);
+        }
+    } catch (e) {
+        const response = await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/${path}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `token ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.github.v3+json'
+            },
+            body: JSON.stringify({
+                message: message,
+                content: encoded
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to create: ${response.status}`);
+        }
+    }
 }
 
 async function uploadImage(seriesId, file) {
+    const token = localStorage.getItem('github_token');
+    if (!token) {
+        throw new Error('No token');
+    }
+    
+    const reader = new FileReader();
+    
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
         reader.onload = async () => {
             try {
                 const base64 = reader.result.split(',')[1];
                 const path = `产品图/${seriesId}/${file.name}`;
-                await commitFile(path, base64, `Upload ${file.name}`, true);
-                resolve();
-            } catch (e) {
-                reject(e);
+                
+                try {
+                    const existing = await fetchFile(path);
+                    
+                    const response = await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/${path}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/vnd.github.v3+json'
+                        },
+                        body: JSON.stringify({
+                            message: `Upload ${file.name}`,
+                            content: base64,
+                            sha: existing.sha
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Upload failed: ${response.status}`);
+                    }
+                    resolve();
+                } catch (e) {
+                    const response = await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/${path}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/vnd.github.v3+json'
+                        },
+                        body: JSON.stringify({
+                            message: `Upload ${file.name}`,
+                            content: base64
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Upload failed: ${response.status}`);
+                    }
+                    resolve();
+                }
+            } catch (error) {
+                reject(error);
             }
         };
-        reader.onerror = reject;
+        reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsDataURL(file);
     });
 }
 
 async function scanForNewImages() {
     const seriesList = await fetchSeriesList();
-    const newImages = [];
+    const allNewImages = [];
     
     for (const series of seriesList) {
-        const metadata = await fetchSeriesMetadata(series.id);
-        const existingImages = metadata && metadata.products ? Object.keys(metadata.products) : [];
-        const allImages = await fetchSeriesImages(series.id);
-        
-        const newForSeries = allImages
-            .filter(img => !existingImages.includes(img.name))
-            .map(img => ({
-                seriesId: series.id,
-                filename: img.name,
-                downloadUrl: img.download_url
-            }));
-        
-        newImages.push(...newForSeries);
+        try {
+            const contents = await fetchFile(`产品图/${series.id}`);
+            const imageFiles = contents.filter(item => 
+                item.type === 'file' && 
+                item.name.match(/\.(jpg|jpeg|png|gif)$/i)
+            );
+            
+            for (const file of imageFiles) {
+                allNewImages.push({
+                    seriesId: series.id,
+                    name: file.name,
+                    path: file.path
+                });
+            }
+        } catch (e) {
+            console.log(`Error scanning series ${series.id}:`, e);
+        }
     }
     
-    return newImages;
+    return allNewImages;
 }
 
 window.githubSync = {
-    getToken,
     fetchSeriesList,
-    fetchSeriesMetadata,
     fetchSeriesImages,
+    fetchSeriesMetadata,
+    deleteSeriesMetadata,
     pushSeriesMetadata,
+    fetchAllImages,
+    commitFile,
     uploadImage,
-    scanForNewImages,
-    commitFile
+    scanForNewImages
 };

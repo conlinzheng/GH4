@@ -2,6 +2,40 @@ let productsData = {};
 let seriesData = [];
 let configData = {};
 
+function getBaseProductName(filename) {
+    return filename.replace(/\s*\(\d+\)\.\w+$/, '');
+}
+
+function groupImagesAsProducts(images) {
+    const productMap = {};
+    
+    images.forEach(img => {
+        const baseName = getBaseProductName(img.name || img);
+        
+        if (!productMap[baseName]) {
+            productMap[baseName] = {
+                name: { zh: baseName, en: baseName, ko: baseName },
+                description: { zh: '', en: '', ko: '' },
+                price: '',
+                materials: {},
+                images: []
+            };
+        }
+        
+        productMap[baseName].images.push(img.name || img);
+    });
+    
+    Object.values(productMap).forEach(product => {
+        product.images.sort((a, b) => {
+            const numA = parseInt(a.match(/\((\d+)\)/)?.[1] || '0');
+            const numB = parseInt(b.match(/\((\d+)\)/)?.[1] || '0');
+            return numA - numB;
+        });
+    });
+    
+    return productMap;
+}
+
 async function loadFromGitHub() {
     try {
         const token = localStorage.getItem('github_token');
@@ -14,22 +48,10 @@ async function loadFromGitHub() {
         seriesData = seriesList;
         
         for (const series of seriesList) {
-            const metadata = await githubSync.fetchSeriesMetadata(series.id);
             const images = await githubSync.fetchSeriesImages(series.id);
             
-            if (metadata) {
-                productsData[series.id] = metadata;
-            } else if (images.length > 0) {
-                const products = {};
-                images.forEach(img => {
-                    const baseName = img.name.replace(/\.[^/.]+$/, '');
-                    products[img.name] = {
-                        name: { zh: baseName, en: baseName, ko: baseName },
-                        description: { zh: '', en: '', ko: '' },
-                        price: '',
-                        materials: {}
-                    };
-                });
+            if (images.length > 0) {
+                const products = groupImagesAsProducts(images);
                 
                 productsData[series.id] = {
                     seriesName: { zh: series.id, en: series.id, ko: series.id },
@@ -73,16 +95,7 @@ function loadLocalData() {
     };
     
     Object.entries(productFiles).forEach(([seriesId, files]) => {
-        const products = {};
-        files.forEach(filename => {
-            const baseName = filename.replace(/\s*\(\d+\)\.\w+$/, '');
-            products[filename] = {
-                name: { zh: baseName, en: baseName, ko: baseName },
-                description: { zh: '', en: '', ko: '' },
-                price: '',
-                materials: {}
-            };
-        });
+        const products = groupImagesAsProducts(files);
         
         productsData[seriesId] = {
             seriesName: { zh: seriesId, en: seriesId, ko: seriesId },
@@ -153,6 +166,27 @@ async function saveToGitHub() {
     await githubSync.commitFile('products-config.json', configContent, 'Update config', false);
 }
 
+async function resetProducts() {
+    const token = localStorage.getItem('github_token');
+    if (!token) {
+        showNotification('请先设置 GitHub Token', 'warning');
+        throw new Error('请先设置 GitHub Token');
+    }
+    
+    productsData = {};
+    seriesData = [];
+    await loadFromGitHub();
+    
+    let savedCount = 0;
+    for (const seriesId of Object.keys(productsData)) {
+        await githubSync.pushSeriesMetadata(seriesId, productsData[seriesId]);
+        savedCount++;
+    }
+    
+    showNotification(`已保存 ${savedCount} 个系列的JSON文件到GitHub`, 'success');
+    return { productsData, seriesData };
+}
+
 function getSeriesData() {
     return seriesData;
 }
@@ -172,6 +206,7 @@ window.dataManager = {
     addProduct,
     deleteProduct,
     saveToGitHub,
+    resetProducts,
     getSeriesData,
     getConfigData,
     setConfigData

@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台 - 鞋类产品</title>
     <link rel="stylesheet" href="css/config-style.css">
+    <style>
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .error { color: #dc3545; padding: 20px; text-align: center; }
+        .success { color: #28a745; padding: 10px; text-align: center; }
+    </style>
 </head>
 <body>
     <header class="config-header">
@@ -13,29 +18,32 @@
         </div>
         <div class="header-right">
             <button class="btn btn-secondary" id="tokenBtn">设置 Token</button>
-            <button class="btn btn-primary" id="syncBtn">同步到 GitHub</button>
         </div>
     </header>
 
     <nav class="config-nav">
-        <a href="#products" class="nav-item active">产品管理</a>
-        <a href="#upload" class="nav-item">图片上传</a>
-        <a href="#series" class="nav-item">系列管理</a>
-        <a href="#config" class="nav-item">网站配置</a>
-        <a href="../index.html" class="nav-item">查看前台</a>
+        <button class="nav-item active" data-view="products">产品管理</button>
+        <button class="nav-item" data-view="upload">图片上传</button>
+        <button class="nav-item" data-view="config">网站配置</button>
+        <a href="../index.html" class="nav-item" target="_blank">查看前台</a>
     </nav>
 
     <main class="config-main">
+        <!-- 产品管理视图 -->
         <div id="view-products" class="view">
             <div class="view-header">
                 <h2>产品管理</h2>
-                <button class="btn btn-primary" id="scanImagesBtn">扫描新图片</button>
+                <div>
+                    <button class="btn btn-secondary" id="scanImagesBtn">扫描新图片</button>
+                    <button class="btn btn-secondary" id="resetProductsBtn">重置产品列表</button>
+                </div>
             </div>
-            <div class="products-list" id="productsList">
+            <div id="productsContainer">
                 <div class="loading">加载中...</div>
             </div>
         </div>
 
+        <!-- 图片上传视图 -->
         <div id="view-upload" class="view" style="display:none;">
             <div class="view-header">
                 <h2>图片上传</h2>
@@ -62,16 +70,7 @@
             </div>
         </div>
 
-        <div id="view-series" class="view" style="display:none;">
-            <div class="view-header">
-                <h2>系列管理</h2>
-                <button class="btn btn-primary" id="addSeriesBtn">添加系列</button>
-            </div>
-            <div class="series-list" id="seriesList">
-                <div class="loading">加载中...</div>
-            </div>
-        </div>
-
+        <!-- 网站配置视图 -->
         <div id="view-config" class="view" style="display:none;">
             <div class="view-header">
                 <h2>网站配置</h2>
@@ -99,9 +98,44 @@
                     <input type="text" id="footerText" class="form-control">
                 </div>
             </div>
+            
+            <div class="config-section">
+                <h3>首页轮播图配置</h3>
+                <div id="heroSlidesContainer"></div>
+                <button class="btn btn-secondary" id="addSlideBtn">添加轮播图</button>
+            </div>
+            
+            <div class="config-section">
+                <h3>首页标题配置</h3>
+                <div class="form-group">
+                    <label>主标题 (中文)</label>
+                    <input type="text" id="heroTitleZh" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>主标题 (英文)</label>
+                    <input type="text" id="heroTitleEn" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>主标题 (韩文)</label>
+                    <input type="text" id="heroTitleKo" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>副标题 (中文)</label>
+                    <input type="text" id="heroSubtitleZh" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>副标题 (英文)</label>
+                    <input type="text" id="heroSubtitleEn" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>副标题 (韩文)</label>
+                    <input type="text" id="heroSubtitleKo" class="form-control">
+                </div>
+            </div>
         </div>
     </main>
 
+    <!-- Token设置弹窗 -->
     <div class="modal" id="tokenModal" style="display:none;">
         <div class="modal-content">
             <h3>设置 GitHub Token</h3>
@@ -114,10 +148,11 @@
         </div>
     </div>
 
+    <!-- 产品编辑弹窗 -->
     <div class="modal" id="productModal" style="display:none;">
         <div class="modal-content modal-large">
             <h3 id="productModalTitle">编辑产品</h3>
-            <div class="product-edit-form" id="productEditForm"></div>
+            <div id="productEditForm"></div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" id="cancelProductBtn">取消</button>
                 <button class="btn btn-primary" id="saveProductBtn">保存</button>
@@ -125,17 +160,647 @@
         </div>
     </div>
 
+    <!-- 通知提示 -->
     <div class="notification" id="notification" style="display:none;"></div>
 
-    <script src="js/app.js"></script>
-    <script src="js/notifier.js"></script>
-    <script src="js/ui-components.js"></script>
-    <script src="js/github-sync.js"></script>
-    <script src="js/data-manager.js"></script>
-    <script src="js/product-editor.js"></script>
-    <script src="js/upload-manager.js"></script>
-    <script src="js/series-manager.js"></script>
-    <script src="js/config-editor.js"></script>
-    <script src="js/auto-save.js"></script>
+    <!-- 核心脚本 -->
+    <script>
+        // 全局通知函数
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification ' + type;
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+        
+        // Token管理
+        const TokenManager = {
+            get: function() {
+                return localStorage.getItem('github_token') || '';
+            },
+            set: function(token) {
+                localStorage.setItem('github_token', token);
+            },
+            has: function() {
+                return !!this.get();
+            }
+        };
+        
+        // GitHub API基础函数
+        const GitHubAPI = {
+            async request(url, options = {}) {
+                const token = TokenManager.get();
+                if (!token) throw new Error('请先设置 GitHub Token');
+                
+                const headers = {
+                    'Authorization': `token ${token}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    ...options.headers
+                };
+                
+                const response = await fetch(url, { ...options, headers });
+                if (!response.ok) {
+                    throw new Error(`请求失败: ${response.status}`);
+                }
+                return response.json();
+            },
+            
+            async getFile(path) {
+                return this.request(`https://api.github.com/repos/conlinzheng/GH4/contents/${path}`);
+            },
+            
+            async saveFile(path, content, message, sha = null) {
+                const encoded = btoa(unescape(encodeURIComponent(content)));
+                const body = {
+                    message: message,
+                    content: encoded
+                };
+                if (sha) body.sha = sha;
+                
+                return this.request(`https://api.github.com/repos/conlinzheng/GH4/contents/${path}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            }
+        };
+    </script>
+    
+    <script>
+        // 视图切换功能
+        const ViewManager = {
+            current: 'products',
+            
+            init: function() {
+                document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        this.switch(btn.dataset.view);
+                    });
+                });
+            },
+            
+            switch: function(viewName) {
+                this.current = viewName;
+                
+                // 更新导航
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.dataset.view === viewName) {
+                        item.classList.add('active');
+                    }
+                });
+                
+                // 切换视图
+                document.querySelectorAll('.view').forEach(view => {
+                    view.style.display = 'none';
+                });
+                document.getElementById('view-' + viewName).style.display = 'block';
+                
+                // 初始化视图
+                if (viewName === 'products' && typeof initProductsView === 'function') {
+                    initProductsView();
+                } else if (viewName === 'upload' && typeof initUploadView === 'function') {
+                    initUploadView();
+                } else if (viewName === 'config' && typeof initConfigView === 'function') {
+                    initConfigView();
+                }
+            }
+        };
+        
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', function() {
+            // Token弹窗
+            document.getElementById('tokenBtn').addEventListener('click', function() {
+                document.getElementById('tokenInput').value = TokenManager.get();
+                document.getElementById('tokenModal').style.display = 'flex';
+            });
+            
+            document.getElementById('cancelTokenBtn').addEventListener('click', function() {
+                document.getElementById('tokenModal').style.display = 'none';
+            });
+            
+            document.getElementById('saveTokenBtn').addEventListener('click', function() {
+                const token = document.getElementById('tokenInput').value.trim();
+                if (token) {
+                    TokenManager.set(token);
+                    showNotification('Token 保存成功', 'success');
+                }
+                document.getElementById('tokenModal').style.display = 'none';
+            });
+            
+            document.getElementById('tokenModal').addEventListener('click', function(e) {
+                if (e.target === this) this.style.display = 'none';
+            });
+            
+            // 初始化视图管理
+            ViewManager.init();
+            ViewManager.switch('products');
+        });
+    </script>
+    
+    <script>
+        // 产品管理功能
+        let allProductsData = [];
+        
+        async function initProductsView() {
+            const container = document.getElementById('productsContainer');
+            
+            if (!TokenManager.has()) {
+                container.innerHTML = '<div class="error">请先设置 GitHub Token</div>';
+                return;
+            }
+            
+            container.innerHTML = '<div class="loading">加载产品数据...</div>';
+            
+            try {
+                const data = await loadSeriesData();
+                allProductsData = data.products;
+                renderProductsList(data, container);
+            } catch (e) {
+                container.innerHTML = '<div class="error">加载失败: ' + e.message + '</div>';
+            }
+            
+            // 绑定按钮事件
+            document.getElementById('scanImagesBtn').onclick = scanImages;
+            document.getElementById('resetProductsBtn').onclick = resetProducts;
+        }
+        
+        async function loadSeriesData() {
+            const seriesList = [
+                { id: '1-PU系列', name: { zh: 'PU系列', en: 'PU Series', ko: 'PU 시리즈' } },
+                { id: '2-真皮系列', name: { zh: '真皮系列', en: 'Genuine Leather', ko: '진피 시리즈' } },
+                { id: '3-短靴系列', name: { zh: '短靴系列', en: 'Boots', ko: '부츠 시리즈' } },
+                { id: '4-乐福系列', name: { zh: '乐福系列', en: 'Loafers', ko: '로퍼 시리즈' } },
+                { id: '5-春季', name: { zh: '春季新款', en: 'Spring New', ko: '봄 신상' } },
+                { id: '6-夏季', name: { zh: '夏季清凉', en: 'Summer Cool', ko: '여름 시원함' } },
+                { id: '7-秋季', name: { zh: '秋季时尚', en: 'Autumn Fashion', ko: '가을 패션' } },
+                { id: '8-冬季', name: { zh: '冬季保暖', en: 'Winter Warm', ko: '겨울保暖' } }
+            ];
+            
+            const productFiles = {
+                '1-PU系列': ['产品1 (1).jpg', '产品1 (2).jpg', '产品1 (3).jpg', '产品1 (4).jpg', '产品1 (5).jpg', '产品2 (1).jpg', '产品2 (2).jpg', '产品2 (3).jpg', '产品2 (4).jpg', '产品2 (5).jpg', '产品2 (6).jpg'],
+                '2-真皮系列': ['勃肯1 (1).jpg', '勃肯1 (2).jpg', '勃肯1 (3).jpg', '勃肯1 (4).jpg', '勃肯1 (5).jpg', '勃肯1 (6).jpg', '勃肯1 (7).jpg'],
+                '3-短靴系列': ['00A (1).jpg', '00A (2).jpg', '00A (3).jpg', '00A (4).jpg', '00A (5).jpg', '00A (6).jpg', '00A (7).jpg'],
+                '4-乐福系列': ['B5 (1).jpg', 'B5 (2).jpg', 'B5 (3).jpg', 'B5 (4).jpg', 'B5 (5).jpg', 'B5 (6).jpg'],
+                '5-春季': ['新款1 (1).jpg', '新款1 (2).jpg', '新款1 (3).jpg', '新款1 (4).jpg', '新款1 (5).jpg', '新款1 (6).jpg', '新款2 (1).jpg', '新款2 (2).jpg', '新款2 (3).jpg', '新款2 (4).jpg', '新款2 (5).jpg', '新款2 (6).jpg', '新款3 (1).jpg', '新款3 (2).jpg', '新款4 (1).jpg', '新款4 (2).jpg', '新款5 (1).jpg', '新款5 (2).jpg', '新款6 (1).jpg', '新款6 (2).jpg', '新款7 (1).jpg', '新款7 (2).jpg', '新款8 (1).jpg', '新款8 (2).jpg', '新款9 (1).jpg', '新款9 (2).jpg', '新款10 (1).jpg', '新款10 (2).jpg', '新款11 (1).jpg', '新款11 (2).jpg'],
+                '6-夏季': ['圆头 (1).jpg', '圆头 (2).jpg', '拖鞋 (1).jpg', '拖鞋 (2).jpg', '拖鞋2 (1).jpg', '拖鞋2 (2).jpg'],
+                '7-秋季': ['B6 (1).jpg', 'B6 (2).jpg', 'B6 (3).jpg', 'B6 (4).jpg', 'B6 (5).jpg', 'B6 (6).jpg', 'B6 (7).jpg'],
+                '8-冬季': ['B7 (1).jpg', 'B7 (2).jpg', 'B7 (3).jpg', 'B7 (4).jpg', 'B7 (5).jpg', 'B7 (6).jpg', 'B7 (7).jpg']
+            };
+            
+            const products = [];
+            
+            for (const series of seriesList) {
+                const files = productFiles[series.id] || [];
+                const productMap = {};
+                
+                files.forEach(filename => {
+                    const baseName = filename.replace(/\s*\(\d+\)\.\w+$/, '');
+                    if (!productMap[baseName]) {
+                        productMap[baseName] = { images: [] };
+                    }
+                    productMap[baseName].images.push(filename);
+                });
+                
+                Object.entries(productMap).forEach(([key, data]) => {
+                    products.push({
+                        seriesId: series.id,
+                        seriesName: series.name,
+                        productKey: key,
+                        mainImage: data.images[0],
+                        detailImages: data.images.slice(1),
+                        name: { zh: key, en: key, ko: key },
+                        description: { zh: '', en: '', ko: '' },
+                        price: '',
+                        materials: {}
+                    });
+                });
+            }
+            
+            // 尝试加载已保存的产品信息
+            for (const series of seriesList) {
+                try {
+                    const file = await GitHubAPI.getFile(`产品图/${series.id}/products.json`);
+                    if (file.content) {
+                        const decoded = decodeURIComponent(escape(atob(file.content)));
+                        const metadata = JSON.parse(decoded);
+                        
+                        products.forEach(p => {
+                            if (p.seriesId === series.id && metadata[p.productKey]) {
+                                const m = metadata[p.productKey];
+                                Object.assign(p, m);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    // 没有metadata文件是正常的
+                }
+            }
+            
+            return { seriesList, products };
+        }
+        
+        function renderProductsList(data, container) {
+            const { seriesList, products } = data;
+            
+            let html = '';
+            
+            seriesList.forEach(series => {
+                const seriesProducts = products.filter(p => p.seriesId === series.id);
+                if (seriesProducts.length > 0) {
+                    html += `<div class="series-section">
+                        <h3>${series.name.zh}</h3>
+                        <div class="products-grid">`;
+                    
+                    seriesProducts.forEach(product => {
+                        html += `<div class="product-card" data-series="${product.seriesId}" data-key="${product.productKey}">
+                            <div class="product-thumb">${product.mainImage}</div>
+                            <div class="product-name">${product.name.zh || product.productKey}</div>
+                            <button class="btn btn-small edit-product-btn">编辑</button>
+                        </div>`;
+                    });
+                    
+                    html += `</div></div>`;
+                }
+            });
+            
+            if (!html) {
+                container.innerHTML = '<div class="error">没有找到产品</div>';
+                return;
+            }
+            
+            container.innerHTML = html;
+            
+            // 绑定编辑按钮
+            container.querySelectorAll('.edit-product-btn').forEach(btn => {
+                btn.onclick = function() {
+                    const card = this.closest('.product-card');
+                    const seriesId = card.dataset.series;
+                    const productKey = card.dataset.key;
+                    const product = allProductsData.find(p => p.seriesId === seriesId && p.productKey === productKey);
+                    openProductModal(product, seriesId);
+                };
+            });
+        }
+        
+        async function scanImages() {
+            if (!TokenManager.has()) {
+                showNotification('请先设置 GitHub Token', 'error');
+                return;
+            }
+            showNotification('扫描功能开发中...', 'info');
+        }
+        
+        async function resetProducts() {
+            if (!confirm('确定要重置产品列表吗？')) return;
+            showNotification('重置功能开发中...', 'info');
+        }
+        
+        // 产品编辑弹窗
+        let currentEditProduct = null;
+        let currentEditSeries = null;
+        
+        function openProductModal(product, seriesId) {
+            currentEditProduct = product;
+            currentEditSeries = seriesId;
+            
+            document.getElementById('productModalTitle').textContent = '编辑产品';
+            
+            const form = document.getElementById('productEditForm');
+            form.innerHTML = `
+                <div class="form-group">
+                    <label>产品名称 (中文)</label>
+                    <input type="text" id="prodNameZh" class="form-control" value="${product.name?.zh || ''}">
+                </div>
+                <div class="form-group">
+                    <label>产品名称 (英文)</label>
+                    <input type="text" id="prodNameEn" class="form-control" value="${product.name?.en || ''}">
+                </div>
+                <div class="form-group">
+                    <label>产品名称 (韩文)</label>
+                    <input type="text" id="prodNameKo" class="form-control" value="${product.name?.ko || ''}">
+                </div>
+                <div class="form-group">
+                    <label>产品描述 (中文)</label>
+                    <textarea id="prodDescZh" class="form-control" rows="2">${product.description?.zh || ''}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>产品描述 (英文)</label>
+                    <textarea id="prodDescEn" class="form-control" rows="2">${product.description?.en || ''}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>产品描述 (韩文)</label>
+                    <textarea id="prodDescKo" class="form-control" rows="2">${product.description?.ko || ''}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>价格</label>
+                    <input type="text" id="prodPrice" class="form-control" value="${product.price || ''}">
+                </div>
+                <div class="form-group">
+                    <label>鞋面材质</label>
+                    <input type="text" id="prodUpper" class="form-control" value="${product.materials?.upper || ''}">
+                </div>
+                <div class="form-group">
+                    <label>内里材质</label>
+                    <input type="text" id="prodLining" class="form-control" value="${product.materials?.lining || ''}">
+                </div>
+                <div class="form-group">
+                    <label>鞋底材质</label>
+                    <input type="text" id="prodSole" class="form-control" value="${product.materials?.sole || ''}">
+                </div>
+            `;
+            
+            document.getElementById('productModal').style.display = 'flex';
+            
+            document.getElementById('cancelProductBtn').onclick = function() {
+                document.getElementById('productModal').style.display = 'none';
+            };
+            
+            document.getElementById('saveProductBtn').onclick = saveProduct;
+        }
+        
+        async function saveProduct() {
+            if (!TokenManager.has()) {
+                showNotification('请先设置 GitHub Token', 'error');
+                return;
+            }
+            
+            const productData = {
+                name: {
+                    zh: document.getElementById('prodNameZh').value,
+                    en: document.getElementById('prodNameEn').value,
+                    ko: document.getElementById('prodNameKo').value
+                },
+                description: {
+                    zh: document.getElementById('prodDescZh').value,
+                    en: document.getElementById('prodDescEn').value,
+                    ko: document.getElementById('prodDescKo').value
+                },
+                price: document.getElementById('prodPrice').value,
+                materials: {
+                    upper: document.getElementById('prodUpper').value,
+                    lining: document.getElementById('prodLining').value,
+                    sole: document.getElementById('prodSole').value
+                }
+            };
+            
+            try {
+                let metadata = {};
+                let sha = null;
+                
+                try {
+                    const file = await GitHubAPI.getFile(`产品图/${currentEditSeries}/products.json`);
+                    if (file.content) {
+                        const decoded = decodeURIComponent(escape(atob(file.content)));
+                        metadata = JSON.parse(decoded);
+                        sha = file.sha;
+                    }
+                } catch (e) {}
+                
+                metadata[currentEditProduct.productKey] = productData;
+                
+                await GitHubAPI.saveFile(
+                    `产品图/${currentEditSeries}/products.json`,
+                    JSON.stringify(metadata, null, 2),
+                    `更新产品: ${currentEditProduct.productKey}`,
+                    sha
+                );
+                
+                showNotification('保存成功', 'success');
+                document.getElementById('productModal').style.display = 'none';
+                
+                initProductsView();
+            } catch (e) {
+                showNotification('保存失败: ' + e.message, 'error');
+            }
+        }
+    </script>
+    
+    <script>
+        // 图片上传功能
+        async function initUploadView() {
+            const select = document.getElementById('uploadSeriesSelect');
+            
+            const seriesList = [
+                { id: '1-PU系列', name: 'PU系列' },
+                { id: '2-真皮系列', name: '真皮系列' },
+                { id: '3-短靴系列', name: '短靴系列' },
+                { id: '4-乐福系列', name: '乐福系列' },
+                { id: '5-春季', name: '春季新款' },
+                { id: '6-夏季', name: '夏季清凉' },
+                { id: '7-秋季', name: '秋季时尚' },
+                { id: '8-冬季', name: '冬季保暖' }
+            ];
+            
+            select.innerHTML = '<option value="">请选择系列</option>' +
+                seriesList.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            
+            // 文件选择预览
+            document.getElementById('fileInput').onchange = function() {
+                const preview = document.getElementById('filePreview');
+                preview.innerHTML = Array.from(this.files).map(f => 
+                    `<div class="file-item">${f.name}</div>`
+                ).join('');
+            };
+            
+            // 上传按钮
+            document.getElementById('uploadBtn').onclick = uploadImages;
+        }
+        
+        async function uploadImages() {
+            const seriesId = document.getElementById('uploadSeriesSelect').value;
+            const files = document.getElementById('fileInput').files;
+            
+            if (!seriesId) {
+                showNotification('请选择系列', 'error');
+                return;
+            }
+            if (files.length === 0) {
+                showNotification('请选择图片', 'error');
+                return;
+            }
+            if (!TokenManager.has()) {
+                showNotification('请先设置 GitHub Token', 'error');
+                return;
+            }
+            
+            const progress = document.getElementById('uploadProgress');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            progress.style.display = 'block';
+            
+            try {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const percent = Math.round(((i + 1) / files.length) * 100);
+                    progressFill.style.width = percent + '%';
+                    progressText.textContent = percent + '%';
+                    
+                    await uploadSingleImage(seriesId, file);
+                }
+                
+                showNotification('上传成功', 'success');
+                document.getElementById('filePreview').innerHTML = '';
+                document.getElementById('fileInput').value = '';
+            } catch (e) {
+                showNotification('上传失败: ' + e.message, 'error');
+            }
+            
+            progress.style.display = 'none';
+            progressFill.style.width = '0%';
+        }
+        
+        async function uploadSingleImage(seriesId, file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async () => {
+                    try {
+                        const base64 = reader.result.split(',')[1];
+                        const path = `产品图/${seriesId}/${file.name}`;
+                        
+                        let sha = null;
+                        try {
+                            const existing = await GitHubAPI.getFile(path);
+                            sha = existing.sha;
+                        } catch (e) {}
+                        
+                        await GitHubAPI.saveFile(path, base64, `上传图片: ${file.name}`, sha);
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+                reader.onerror = () => reject(new Error('读取文件失败'));
+                reader.readAsDataURL(file);
+            });
+        }
+    </script>
+    
+    <script>
+        // 网站配置功能
+        let heroSlides = [];
+        
+        async function initConfigView() {
+            // 加载现有配置
+            try {
+                const file = await GitHubAPI.getFile('products-config.json');
+                if (file.content) {
+                    const decoded = decodeURIComponent(escape(atob(file.content)));
+                    const config = JSON.parse(decoded);
+                    
+                    document.getElementById('siteName').value = config.siteName || '';
+                    document.getElementById('contactEmail').value = config.contact?.email || '';
+                    document.getElementById('contactPhone').value = config.contact?.phone || '';
+                    document.getElementById('contactAddress').value = config.contact?.address || '';
+                    document.getElementById('footerText').value = config.footer?.text || '';
+                    
+                    document.getElementById('heroTitleZh').value = config.heroTitle?.zh || '';
+                    document.getElementById('heroTitleEn').value = config.heroTitle?.en || '';
+                    document.getElementById('heroTitleKo').value = config.heroTitle?.ko || '';
+                    document.getElementById('heroSubtitleZh').value = config.heroSubtitle?.zh || '';
+                    document.getElementById('heroSubtitleEn').value = config.heroSubtitle?.en || '';
+                    document.getElementById('heroSubtitleKo').value = config.heroSubtitle?.ko || '';
+                    
+                    heroSlides = config.heroSlides || [];
+                }
+            } catch (e) {
+                heroSlides = [
+                    { image: 'img1-50/1.png' },
+                    { image: 'img1-50/2.png' },
+                    { image: 'img1-50/3.png' },
+                    { image: 'img1-50/4.png' },
+                    { image: 'img1-50/5.png' }
+                ];
+            }
+            
+            renderHeroSlides();
+            
+            document.getElementById('saveConfigBtn').onclick = saveConfig;
+            document.getElementById('addSlideBtn').onclick = addSlide;
+        }
+        
+        function renderHeroSlides() {
+            const container = document.getElementById('heroSlidesContainer');
+            container.innerHTML = heroSlides.map((slide, index) => `
+                <div class="slide-config-item">
+                    <div class="form-group">
+                        <label>图片路径 ${index + 1}</label>
+                        <input type="text" class="slide-image form-control" value="${slide.image || ''}" placeholder="如: img1-50/1.png">
+                    </div>
+                    <button type="button" class="btn btn-danger" onclick="removeSlide(${index})">删除</button>
+                </div>
+            `).join('');
+        }
+        
+        function addSlide() {
+            heroSlides.push({ image: '' });
+            renderHeroSlides();
+        }
+        
+        function removeSlide(index) {
+            heroSlides.splice(index, 1);
+            renderHeroSlides();
+        }
+        
+        async function saveConfig() {
+            if (!TokenManager.has()) {
+                showNotification('请先设置 GitHub Token', 'error');
+                return;
+            }
+            
+            // 收集轮播图数据
+            const slides = [];
+            document.querySelectorAll('.slide-image').forEach(input => {
+                if (input.value.trim()) {
+                    slides.push({ image: input.value.trim() });
+                }
+            });
+            
+            const configData = {
+                siteName: document.getElementById('siteName').value,
+                contact: {
+                    email: document.getElementById('contactEmail').value,
+                    phone: document.getElementById('contactPhone').value,
+                    address: document.getElementById('contactAddress').value
+                },
+                footer: {
+                    text: document.getElementById('footerText').value
+                },
+                heroTitle: {
+                    zh: document.getElementById('heroTitleZh').value,
+                    en: document.getElementById('heroTitleEn').value,
+                    ko: document.getElementById('heroTitleKo').value
+                },
+                heroSubtitle: {
+                    zh: document.getElementById('heroSubtitleZh').value,
+                    en: document.getElementById('heroSubtitleEn').value,
+                    ko: document.getElementById('heroSubtitleKo').value
+                },
+                heroSlides: slides
+            };
+            
+            try {
+                let sha = null;
+                try {
+                    const existing = await GitHubAPI.getFile('products-config.json');
+                    sha = existing.sha;
+                } catch (e) {}
+                
+                await GitHubAPI.saveFile(
+                    'products-config.json',
+                    JSON.stringify(configData, null, 2),
+                    '更新网站配置',
+                    sha
+                );
+                showNotification('配置保存成功', 'success');
+            } catch (e) {
+                showNotification('保存失败: ' + e.message, 'error');
+            }
+        }
+    </script>
 </body>
 </html>
