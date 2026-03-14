@@ -33,8 +33,20 @@
         <div id="view-products" class="view">
             <div class="view-header">
                 <h2>产品管理</h2>
-                <div>
-                    <button class="btn btn-secondary" id="scanImagesBtn">扫描新图片</button>
+                <div class="header-actions">
+                    <select id="seriesSelect" class="form-control">
+                        <option value="">选择系列</option>
+                        <option value="1-PU系列">1-PU系列</option>
+                        <option value="2-真皮系列">2-真皮系列</option>
+                        <option value="3-短靴系列">3-短靴系列</option>
+                        <option value="4-乐福系列">4-乐福系列</option>
+                        <option value="5-春季">5-春季</option>
+                        <option value="6-夏季">6-夏季</option>
+                        <option value="7-秋季">7-秋季</option>
+                        <option value="8-冬季">8-冬季</option>
+                    </select>
+                    <button class="btn btn-secondary" id="scanSeriesBtn">扫描选定系列</button>
+                    <button class="btn btn-secondary" id="scanImagesBtn">扫描全部</button>
                     <button class="btn btn-secondary" id="resetProductsBtn">重置产品列表</button>
                 </div>
             </div>
@@ -326,6 +338,89 @@
             // 绑定按钮事件
             document.getElementById('scanImagesBtn').onclick = scanImages;
             document.getElementById('resetProductsBtn').onclick = resetProducts;
+            document.getElementById('scanSeriesBtn').onclick = scanSelectedSeries;
+        }
+        
+        async function scanSelectedSeries() {
+            const seriesId = document.getElementById('seriesSelect').value;
+            if (!seriesId) {
+                showNotification('请先选择要扫描的系列', 'warning');
+                return;
+            }
+            
+            if (!TokenManager.has()) {
+                showNotification('请先设置 GitHub Token', 'error');
+                return;
+            }
+            
+            const container = document.getElementById('productsContainer');
+            container.innerHTML = '<div class="loading">正在扫描选定系列...</div>';
+            
+            try {
+                const seriesNames = {
+                    '1-PU系列': 'PU系列',
+                    '2-真皮系列': '真皮系列',
+                    '3-短靴系列': '短靴系列',
+                    '4-乐福系列': '乐福系列',
+                    '5-春季': '春季新款',
+                    '6-夏季': '夏季清凉',
+                    '7-秋季': '秋季时尚',
+                    '8-冬季': '冬季保暖'
+                };
+                
+                const contents = await GitHubAPI.getFile(`产品图/${seriesId}`);
+                const imageFiles = contents.filter(item => 
+                    item.type === 'file' && 
+                    item.name.match(/\.(jpg|jpeg|png|gif)$/i)
+                );
+                
+                const productMap = {};
+                imageFiles.forEach(file => {
+                    const baseName = file.name.replace(/\s*\(\d+\)\.\w+$/, '');
+                    if (!productMap[baseName]) {
+                        productMap[baseName] = { images: [] };
+                    }
+                    productMap[baseName].images.push(file.name);
+                });
+                
+                Object.values(productMap).forEach(p => {
+                    p.images.sort((a, b) => {
+                        const numA = parseInt(a.match(/\((\d+)\)/)?.[1] || '0');
+                        const numB = parseInt(b.match(/\((\d+)\)/)?.[1] || '0');
+                        return numA - numB;
+                    });
+                });
+                
+                const metadata = {
+                    seriesName: { 
+                        zh: seriesNames[seriesId], 
+                        en: seriesNames[seriesId], 
+                        ko: seriesNames[seriesId] 
+                    },
+                    products: productMap
+                };
+                
+                try {
+                    const existing = await GitHubAPI.getFile(`产品图/${seriesId}/products.json`);
+                    await GitHubAPI.saveFile(
+                        `产品图/${seriesId}/products.json`,
+                        JSON.stringify(metadata, null, 2),
+                        `扫描系列: ${seriesNames[seriesId]}`,
+                        existing.sha
+                    );
+                } catch (e) {
+                    await GitHubAPI.saveFile(
+                        `产品图/${seriesId}/products.json`,
+                        JSON.stringify(metadata, null, 2),
+                        `创建产品列表: ${seriesNames[seriesId]}`
+                    );
+                }
+                
+                showNotification(`扫描完成：${seriesNames[seriesId]} 共 ${Object.keys(productMap).length} 个产品`, 'success');
+                initProductsView();
+            } catch (e) {
+                container.innerHTML = '<div class="error">扫描失败: ' + e.message + '</div>';
+            }
         }
         
         async function loadSeriesData() {
@@ -451,12 +546,148 @@
                 showNotification('请先设置 GitHub Token', 'error');
                 return;
             }
-            showNotification('扫描功能开发中...', 'info');
+            
+            const container = document.getElementById('productsContainer');
+            container.innerHTML = '<div class="loading">正在扫描新图片...</div>';
+            
+            try {
+                const seriesList = [
+                    { id: '1-PU系列', name: 'PU系列' },
+                    { id: '2-真皮系列', name: '真皮系列' },
+                    { id: '3-短靴系列', name: '短靴系列' },
+                    { id: '4-乐福系列', name: '乐福系列' },
+                    { id: '5-春季', name: '春季新款' },
+                    { id: '6-夏季', name: '夏季清凉' },
+                    { id: '7-秋季', name: '秋季时尚' },
+                    { id: '8-冬季', name: '冬季保暖' }
+                ];
+                
+                let totalNewImages = 0;
+                let totalNewProducts = 0;
+                
+                for (const series of seriesList) {
+                    try {
+                        const contents = await GitHubAPI.getFile(`产品图/${series.id}`);
+                        const imageFiles = contents.filter(item => 
+                            item.type === 'file' && 
+                            item.name.match(/\.(jpg|jpeg|png|gif)$/i)
+                        );
+                        
+                        const productMap = {};
+                        imageFiles.forEach(file => {
+                            const baseName = file.name.replace(/\s*\(\d+\)\.\w+$/, '');
+                            if (!productMap[baseName]) {
+                                productMap[baseName] = [];
+                            }
+                            productMap[baseName].push(file.name);
+                        });
+                        
+                        Object.keys(productMap).forEach(key => {
+                            productMap[key].sort((a, b) => {
+                                const numA = parseInt(a.match(/\((\d+)\)/)?.[1] || '0');
+                                const numB = parseInt(b.match(/\((\d+)\)/)?.[1] || '0');
+                                return numA - numB;
+                            });
+                        });
+                        
+                        totalNewImages += imageFiles.length;
+                        totalNewProducts += Object.keys(productMap).length;
+                    } catch (e) {
+                        console.log(`扫描系列 ${series.id} 失败:`, e);
+                    }
+                }
+                
+                showNotification(`扫描完成：共发现 ${totalNewProducts} 个产品，${totalNewImages} 张图片`, 'success');
+                initProductsView();
+            } catch (e) {
+                container.innerHTML = '<div class="error">扫描失败: ' + e.message + '</div>';
+            }
         }
         
         async function resetProducts() {
-            if (!confirm('确定要重置产品列表吗？')) return;
-            showNotification('重置功能开发中...', 'info');
+            if (!confirm('确定要重置产品列表吗？这将重新从GitHub仓库扫描所有产品图片。')) return;
+            
+            if (!TokenManager.has()) {
+                showNotification('请先设置 GitHub Token', 'error');
+                return;
+            }
+            
+            const container = document.getElementById('productsContainer');
+            container.innerHTML = '<div class="loading">正在重置产品列表...</div>';
+            
+            try {
+                const seriesList = [
+                    { id: '1-PU系列', name: 'PU系列' },
+                    { id: '2-真皮系列', name: '真皮系列' },
+                    { id: '3-短靴系列', name: '短靴系列' },
+                    { id: '4-乐福系列', name: '乐福系列' },
+                    { id: '5-春季', name: '春季新款' },
+                    { id: '6-夏季', name: '夏季清凉' },
+                    { id: '7-秋季', name: '秋季时尚' },
+                    { id: '8-冬季', name: '冬季保暖' }
+                ];
+                
+                let totalProducts = 0;
+                
+                for (const series of seriesList) {
+                    try {
+                        const contents = await GitHubAPI.getFile(`产品图/${series.id}`);
+                        const imageFiles = contents.filter(item => 
+                            item.type === 'file' && 
+                            item.name.match(/\.(jpg|jpeg|png|gif)$/i)
+                        );
+                        
+                        const productMap = {};
+                        imageFiles.forEach(file => {
+                            const baseName = file.name.replace(/\s*\(\d+\)\.\w+$/, '');
+                            if (!productMap[baseName]) {
+                                productMap[baseName] = {
+                                    images: []
+                                };
+                            }
+                            productMap[baseName].images.push(file.name);
+                        });
+                        
+                        Object.values(productMap).forEach(p => {
+                            p.images.sort((a, b) => {
+                                const numA = parseInt(a.match(/\((\d+)\)/)?.[1] || '0');
+                                const numB = parseInt(b.match(/\((\d+)\)/)?.[1] || '0');
+                                return numA - numB;
+                            });
+                        });
+                        
+                        const metadata = {
+                            seriesName: { zh: series.name, en: series.name, ko: series.name },
+                            products: productMap
+                        };
+                        
+                        try {
+                            const existing = await GitHubAPI.getFile(`产品图/${series.id}/products.json`);
+                            await GitHubAPI.saveFile(
+                                `产品图/${series.id}/products.json`,
+                                JSON.stringify(metadata, null, 2),
+                                `重置产品列表: ${series.name}`,
+                                existing.sha
+                            );
+                        } catch (e) {
+                            await GitHubAPI.saveFile(
+                                `产品图/${series.id}/products.json`,
+                                JSON.stringify(metadata, null, 2),
+                                `创建产品列表: ${series.name}`
+                            );
+                        }
+                        
+                        totalProducts += Object.keys(productMap).length;
+                    } catch (e) {
+                        console.log(`重置系列 ${series.id} 失败:`, e);
+                    }
+                }
+                
+                showNotification(`重置完成：共重置 ${totalProducts} 个产品到GitHub`, 'success');
+                initProductsView();
+            } catch (e) {
+                container.innerHTML = '<div class="error">重置失败: ' + e.message + '</div>';
+            }
         }
         
         // 产品编辑弹窗
