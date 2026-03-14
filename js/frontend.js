@@ -117,13 +117,9 @@ function groupImagesAsProducts(files, seriesId, seriesName) {
 }
 
 async function loadFromGitHubProducts() {
-    const token = localStorage.getItem('github_token');
-    if (!token) return null;
-    
     try {
         const seriesRes = await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/产品图`, {
             headers: {
-                'Authorization': `token ${token}`,
                 'Accept': 'application/vnd.github.v3+json'
             }
         });
@@ -138,7 +134,6 @@ async function loadFromGitHubProducts() {
                 try {
                     const metaRes = await fetch(`https://api.github.com/repos/conlinzheng/GH4/contents/产品图/${series.name}/products.json`, {
                         headers: {
-                            'Authorization': `token ${token}`,
                             'Accept': 'application/vnd.github.v3+json'
                         }
                     });
