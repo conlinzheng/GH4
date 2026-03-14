@@ -568,3 +568,79 @@ textarea.form-control {
     color: #666;
     margin-bottom: 0.5rem;
 }
+
+.series-section {
+    margin-bottom: 2rem;
+}
+
+.series-section h3 {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.product-card {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.product-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.product-card .product-thumb {
+    width: 100%;
+    height: 150px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.8rem;
+    background: var(--light-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: #999;
+}
+
+.product-card .product-name {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+}
+
+.product-card .btn {
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+.btn-small {
+    padding: 0.3rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.no-products {
+    text-align: center;
+    padding: 2rem;
+    color: #999;
+}
+
+.error-message {
+    color: var(--accent-color);
+    padding: 1rem;
+    text-align: center;
+    background: rgba(231, 76, 60, 0.1);
+    border-radius: 4px;
+}

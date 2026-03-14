@@ -53,8 +53,17 @@ async function loadFromGitHub() {
             if (images.length > 0) {
                 const products = groupImagesAsProducts(images);
                 
+                const savedMetadata = await githubSync.fetchSeriesMetadata(series.id);
+                if (savedMetadata && savedMetadata.products) {
+                    Object.keys(products).forEach(key => {
+                        if (savedMetadata.products[key]) {
+                            products[key] = { ...products[key], ...savedMetadata.products[key] };
+                        }
+                    });
+                }
+                
                 productsData[series.id] = {
-                    seriesName: { zh: series.id, en: series.id, ko: series.id },
+                    seriesName: savedMetadata?.seriesName || { zh: series.id, en: series.id, ko: series.id },
                     products: products
                 };
             }
@@ -175,7 +184,22 @@ async function resetProducts() {
     
     productsData = {};
     seriesData = [];
-    await loadFromGitHub();
+    
+    const seriesList = await githubSync.fetchSeriesList();
+    seriesData = seriesList;
+    
+    for (const series of seriesList) {
+        const images = await githubSync.fetchSeriesImages(series.id);
+        
+        if (images.length > 0) {
+            const products = groupImagesAsProducts(images);
+            
+            productsData[series.id] = {
+                seriesName: { zh: series.id, en: series.id, ko: series.id },
+                products: products
+            };
+        }
+    }
     
     let savedCount = 0;
     for (const seriesId of Object.keys(productsData)) {

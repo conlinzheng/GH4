@@ -306,14 +306,14 @@ async function scanNewImages() {
         
         const groupedImages = {};
         newImages.forEach(img => {
-            const baseName = img.filename.replace(/\s*\(\d+\)\.\w+$/, '');
+            const baseName = img.name.replace(/\s*\(\d+\)\.\w+$/, '');
             if (!groupedImages[img.seriesId]) {
                 groupedImages[img.seriesId] = {};
             }
             if (!groupedImages[img.seriesId][baseName]) {
                 groupedImages[img.seriesId][baseName] = [];
             }
-            groupedImages[img.seriesId][baseName].push(img.filename);
+            groupedImages[img.seriesId][baseName].push(img.name);
         });
         
         Object.entries(groupedImages).forEach(([seriesId, products]) => {

@@ -43,8 +43,15 @@ function switchView(viewName) {
         targetView.style.display = 'block';
     }
     
-    if (typeof window[`init${capitalize(viewName)}`] === 'function') {
-        window[`init${capitalize(viewName)}`]();
+    const viewInitMap = {
+        'products': 'initProductsView',
+        'upload': 'initUploadView',
+        'config': 'initConfigView'
+    };
+    
+    const initFnName = viewInitMap[viewName];
+    if (initFnName && typeof window[initFnName] === 'function') {
+        window[initFnName]();
     }
 }
 
